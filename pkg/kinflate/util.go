@@ -18,10 +18,14 @@ package kinflate
 
 import (
 	"errors"
+	"fmt"
+	"io"
 	"io/ioutil"
+	"os"
 	"path"
+	"path/filepath"
 
-	"gopkg.in/yaml.v2"
+	"github.com/ghodss/yaml"
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -30,12 +34,18 @@ import (
 
 const kubeManifestFileName = "Kube-manifest.yaml"
 
+type resource struct {
+	resources  []string
+	configmaps []manifest.ConfigMap
+	secrets    []manifest.Secret
+}
+
 // loadBaseAndOverlayPkg returns:
 // - List of FilenameOptions, each FilenameOptions contains all the files and whether recursive for each base defined in overlay kube-manifest.yaml.
 // - Fileoptions for overlay.
 // - Package object for overlay.
 // - A potential error.
-func loadBaseAndOverlayPkg(f string) ([]string, []string, *manifest.Manifest, error) {
+func loadBaseAndOverlayPkg(f string) ([]*resource, *resource, *manifest.Manifest, error) {
 	overlay, err := loadManifestPkg(path.Join(f, kubeManifestFileName))
 	if err != nil {
 		return nil, nil, nil, err
@@ -43,28 +53,34 @@ func loadBaseAndOverlayPkg(f string) ([]string, []string, *manifest.Manifest, er
 
 	// TODO: support `recursive` when we figure out what its behavior should be.
 	// Recursive: overlay.Recursive
-	overlayFiles := []string{}
 
-	for _, o := range overlay.Patches {
-		overlayFiles = append(overlayFiles, path.Join(f, o))
+	overlayResource := adjustPathsForConfigMapAndSecret(overlay, []string{f})
+	overlayResource.resources, err = adjustPaths(overlay.Patches, []string{f})
+	if err != nil {
+		return nil, nil, nil, err
 	}
 
 	if len(overlay.Resources) == 0 {
 		return nil, nil, nil, errors.New("expect at least one base, but got 0")
 	}
 
-	var baseFiles []string
+	var baseResources []*resource
 	for _, base := range overlay.Resources {
 		baseManifest, err := loadManifestPkg(path.Join(f, base, kubeManifestFileName))
 		if err != nil {
 			return nil, nil, nil, err
 		}
-		for _, filename := range baseManifest.Resources {
-			baseFiles = append(baseFiles, path.Join(f, base, filename))
+
+		baseResource := adjustPathsForConfigMapAndSecret(baseManifest, []string{f, base})
+		baseResource.resources, err = adjustPaths(baseManifest.Resources, []string{f, base})
+		if err != nil {
+			return nil, nil, nil, err
 		}
+
+		baseResources = append(baseResources, baseResource)
 	}
 
-	return baseFiles, overlayFiles, overlay, nil
+	return baseResources, overlayResource, overlay, nil
 }
 
 // loadManifestPkg loads a manifest file and parse it in to the Package object.
@@ -79,38 +95,101 @@ func loadManifestPkg(filename string) (*manifest.Manifest, error) {
 	return &pkg, err
 }
 
-// updateMetadata will inject the labels and annotations and add name prefix.
-func updateMetadata(jsonObj []byte, overlayPkg *manifest.Manifest) ([]byte, error) {
-	if len(jsonObj) == 0 || overlayPkg == nil {
-		return nil, nil
-	}
+// This func will build a visitor given filenameOptions.
+// It will visit each info and populate the map.
+func populateResourceMap(files []string, m map[groupVersionKindName][]byte, errOut io.Writer) error {
+	decoder := unstructured.UnstructuredJSONScheme
 
-	obj, _, err := unstructured.UnstructuredJSONScheme.Decode(jsonObj, nil, nil)
+	for _, file := range files {
+		content, err := ioutil.ReadFile(file)
+		if err != nil {
+			return err
+		}
 
-	accessor, err := meta.Accessor(obj)
-	if err != nil {
-		return nil, err
-	}
+		// try converting to json, if there is a error, probably because the content is already json.
+		jsoncontent, err := yaml.YAMLToJSON(content)
+		if err != nil {
+			fmt.Fprintf(errOut, "error when trying to convert yaml to json: %v\n", err)
+		} else {
+			content = jsoncontent
+		}
 
-	accessor.SetName(overlayPkg.NamePrefix + accessor.GetName())
+		obj, gvk, err := decoder.Decode(content, nil, nil)
+		if err != nil {
+			return err
+		}
+		accessor, err := meta.Accessor(obj)
+		if err != nil {
+			return err
+		}
+		name := accessor.GetName()
+		gvkn := groupVersionKindName{gvk: *gvk, name: name}
+		if err != nil {
+			return err
+		}
+		if _, found := m[gvkn]; found {
+			return fmt.Errorf("unexpected same groupVersionKindName: %#v", gvkn)
+		}
+		m[gvkn] = content
+	}
+	return nil
+}
 
-	labels := accessor.GetLabels()
-	if labels == nil {
-		labels = map[string]string{}
-	}
-	for k, v := range overlayPkg.ObjectLabels {
-		labels[k] = v
-	}
-	accessor.SetLabels(labels)
+func adjustPathsForConfigMapAndSecret(in *manifest.Manifest, pathToDir []string) *resource {
+	out := &resource{}
+	out.configmaps = adjustPathForConfigMaps(in.Configmaps, pathToDir)
+	out.secrets = adjustPathForSecrets(in.Secrets, pathToDir)
+	return out
+}
 
-	annotations := accessor.GetAnnotations()
-	if annotations == nil {
-		annotations = map[string]string{}
+func adjustPaths(original []string, prefix []string) ([]string, error) {
+	adjusted := []string{}
+	var e error
+	for _, filename := range original {
+		filepath.Walk(adjustPath(filename, prefix), func(path string, _ os.FileInfo, err error) error {
+			if err != nil {
+				e = err
+				return err
+			}
+			adjusted = append(adjusted, path)
+			return nil
+		})
 	}
-	for k, v := range overlayPkg.ObjectAnnotations {
-		annotations[k] = v
-	}
-	accessor.SetAnnotations(annotations)
+	return adjusted, e
+}
 
-	return yaml.Marshal(obj)
+func adjustPathForConfigMaps(cms []manifest.ConfigMap, prefix []string) []manifest.ConfigMap {
+	for i, cm := range cms {
+		if len(cm.FileSources) > 0 {
+			for j, fileSource := range cm.FileSources {
+				cms[i].FileSources[j] = adjustPath(fileSource, prefix)
+			}
+		}
+		if len(cm.EnvSource) > 0 {
+			cms[i].EnvSource = adjustPath(cm.EnvSource, prefix)
+		}
+	}
+	return cms
+}
+
+func adjustPathForSecrets(secrets []manifest.Secret, prefix []string) []manifest.Secret {
+	for i, secret := range secrets {
+		if len(secret.FileSources) > 0 {
+			for j, fileSource := range secret.FileSources {
+				secrets[i].FileSources[j] = adjustPath(fileSource, prefix)
+			}
+		}
+		if len(secret.EnvSource) > 0 {
+			secrets[i].EnvSource = adjustPath(secret.EnvSource, prefix)
+		}
+		if secret.TLS != nil {
+			secrets[i].TLS.CertFile = adjustPath(secret.TLS.CertFile, prefix)
+			secrets[i].TLS.KeyFile = adjustPath(secret.TLS.KeyFile, prefix)
+		}
+	}
+	return secrets
+}
+
+func adjustPath(original string, prefix []string) string {
+	return path.Join(append(prefix, original)...)
 }

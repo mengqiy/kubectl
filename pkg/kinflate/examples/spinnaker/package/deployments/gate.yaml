@@ -1,0 +1,38 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: gate
+  labels:
+    component: gate
+spec:
+  strategy:
+    rollingUpdate:
+      maxUnavailable: 0
+  replicas: 1
+  template:
+    metadata:
+      annotations:
+        # TODO
+        checksum/config: {{ include (print $.Template.BasePath "/configmap/spinnaker-config.yaml") . | sha256sum }}
+      labels:
+        component: gate
+    spec:
+      containers:
+        - image: gcr.io/spinnaker-marketplace/gate:0.5.0-72
+          name: gate
+          ports:
+            - containerPort: 8084
+              name: gate
+          volumeMounts:
+            - mountPath: /opt/spinnaker/config
+              name: spinnaker-config
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8084
+            initialDelaySeconds: 30
+            timeoutSeconds: 1
+      volumes:
+        - name: spinnaker-config
+          configMap:
+            name: spinnaker-config

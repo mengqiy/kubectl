@@ -1,0 +1,14 @@
+# This example is from https://docs.google.com/document/d/1cLPGweVEYrVqQvBLJg6sxV-TrE5Rm2MNOBA_cxZP2WU/edit#heading=h.dr88tktf0e99
+
+# Inspired by https://github.com/kubernetes/helm/blob/master/docs/charts.md
+# But Kubernetes API style
+apiVersion: manifest.k8s.io/v1alpha1
+kind: Descriptor
+metadata:
+  name: spinnaker
+description: Open source, multi-cloud continuous delivery platform for releasing software changes with high velocity and confidence.
+# These are search keywords
+keywords: [multi-cloud, continuous delivery]
+home: http://spinnaker.io/
+sources: https://github.com/kubernetes/kubectl/pkg/kinflate/examples/spinnaker/
+icon: https://pbs.twimg.com/profile_images/669205226994319362/O7OjwPrh_400x400.png

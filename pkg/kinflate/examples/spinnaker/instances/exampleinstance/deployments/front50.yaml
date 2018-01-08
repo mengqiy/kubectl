@@ -1,0 +1,18 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: front50
+spec:
+  template:
+    spec:
+      containers:
+        - image: gcr.io/spinnaker-marketplace/front50:0.4.1-72 # you can change the image here.
+          name: front50
+# enable this by uncomment the following 2 lines
+#          volumeMounts:
+#            - mountPath: /root/.kube
+#              name: gcs
+#      volumes:
+#        - name: gcs
+#          secret:
+#            secretName: gcs

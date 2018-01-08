@@ -1,0 +1,38 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: orca
+  labels:
+    component: orca
+spec:
+  strategy:
+    rollingUpdate:
+      maxUnavailable: 0
+  replicas: 1
+  template:
+    metadata:
+      annotations:
+        # TODO
+        checksum/config: {{ include (print $.Template.BasePath "/configmap/spinnaker-config.yaml") . | sha256sum }}
+      labels:
+        component: orca
+    spec:
+      containers:
+        - image: gcr.io/spinnaker-marketplace/orca:0.5.0-72
+          name: orca
+          ports:
+            - containerPort: 8083
+              name: orca
+          volumeMounts:
+            - mountPath: /opt/spinnaker/config
+              name: spinnaker-config
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8083
+            initialDelaySeconds: 20
+            timeoutSeconds: 1
+      volumes:
+        - name: spinnaker-config
+          configMap:
+            name: spinnaker-config

@@ -1,0 +1,23 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: create-bucket
+  labels:
+    component: minio
+  annotations:
+    "helm.sh/hook": post-install
+spec:
+  template:
+    metadata:
+      labels:
+        component: minio
+    spec:
+      restartPolicy: OnFailure
+      containers:
+      - name: post-install-job
+        image: "viglesiasce/minio-client:v0.4.0"
+        command:
+        - sh
+        - -c
+        # TODO
+        - "mc config host add {{.Release.Name}}-minio http://{{.Release.Name}}-minio-svc:9000 {{ .Values.minio.accessKey }} {{ .Values.minio.secretKey }} S3v4 &&  mc mb {{.Release.Name}}-minio/spinnaker"

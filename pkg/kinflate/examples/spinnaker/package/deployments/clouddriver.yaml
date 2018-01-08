@@ -1,0 +1,43 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: clouddriver
+  labels:
+    component: clouddriver
+spec:
+  strategy:
+    rollingUpdate:
+      maxUnavailable: 0
+  replicas: 1
+  template:
+    metadata:
+      annotations:
+        # TODO: solve this
+        checksum/config: {{ include (print $.Template.BasePath "/configmap/spinnaker-config.yaml") . | sha256sum }}
+      labels:
+        component: clouddriver
+    spec:
+      containers:
+        - image: gcr.io/spinnaker-marketplace/clouddriver:0.5.0-72
+          name: clouddriver
+          ports:
+            - containerPort: 7002
+              name: clouddriver
+          volumeMounts:
+            - mountPath: /opt/spinnaker/config
+              name: spinnaker-config
+            - mountPath: /tmp/registry
+              name: registry
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 7002
+            initialDelaySeconds: 20
+            timeoutSeconds: 1
+      volumes:
+        - name: spinnaker-config
+          configMap:
+            name: spinnaker-config
+        - name: registry
+          secret:
+            secretName: registry

@@ -1,0 +1,39 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: deck
+  labels:
+    component: deck
+spec:
+  strategy:
+    rollingUpdate:
+      maxUnavailable: 0
+  replicas: 1
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap/spinnaker-config.yaml") . | sha256sum }}
+      labels:
+        component: deck
+    spec:
+      containers:
+        - image: gcr.io/spinnaker-marketplace/deck:1.3.0-72
+          name: deck
+          env:
+            - name: API_HOST
+              # TODO: solve this
+              value: http://{{ template "fullname" . }}-gate:8084/
+            - name: DECK_HOST
+              value: "0.0.0.0"
+            - name: DECK_PORT
+              value: "9000"
+          ports:
+            - containerPort: 9000
+              name: deck
+          volumeMounts:
+            - mountPath: /opt/spinnaker/config
+              name: spinnaker-config
+      volumes:
+        - name: spinnaker-config
+          configMap:
+            name: spinnaker-config

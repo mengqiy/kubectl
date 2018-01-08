@@ -1,0 +1,62 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<flow-definition plugin="workflow-job@2.11">
+  <actions/>
+  <description></description>
+  <keepDependencies>false</keepDependencies>
+  <properties>
+    <hudson.model.ParametersDefinitionProperty>
+      <parameterDefinitions>
+        <hudson.model.StringParameterDefinition>
+          <name>EXECUTOR_IMAGE</name>
+          <description></description>
+          <defaultValue>jenkins/jnlp-slave:3.10-1</defaultValue>
+        </hudson.model.StringParameterDefinition>
+        <hudson.model.StringParameterDefinition>
+          <name>REPOSITORY_URL</name>
+          <description></description>
+          <defaultValue></defaultValue>
+        </hudson.model.StringParameterDefinition>
+        <hudson.model.StringParameterDefinition>
+          <name>BRANCH</name>
+          <description></description>
+          <defaultValue></defaultValue>
+        </hudson.model.StringParameterDefinition>
+        <hudson.model.StringParameterDefinition>
+          <name>COMMAND</name>
+          <description></description>
+          <defaultValue></defaultValue>
+        </hudson.model.StringParameterDefinition>
+      </parameterDefinitions>
+    </hudson.model.ParametersDefinitionProperty>
+    <org.jenkinsci.plugins.workflow.job.properties.PipelineTriggersJobProperty>
+      <triggers/>
+    </org.jenkinsci.plugins.workflow.job.properties.PipelineTriggersJobProperty>
+  </properties>
+  <definition class="org.jenkinsci.plugins.workflow.cps.CpsFlowDefinition" plugin="workflow-cps@2.36">
+    <script>podTemplate(label: &apos;jenkins-build-image&apos;, containers: [
+      containerTemplate(name: &apos;jenkins-executor&apos;, image: &apos;$EXECUTOR_IMAGE&apos;, ttyEnabled: true, command: &apos;cat&apos;),
+      ]) {
+
+      node {
+      checkout([$class: &apos;GitSCM&apos;,
+      branches: [[name: &apos;$BRANCH&apos;]],
+      doGenerateSubmoduleConfigurations: false,
+      extensions: [],
+      submoduleCfg: [],
+      userRemoteConfigs: [[url: &apos;$REPOSITORY_URL&apos;]]]
+      )
+
+      stage(&apos;run-command&apos;) {
+      sh &apos;env &gt; properties&apos;
+      sh &apos;$COMMAND&apos;
+      }
+
+      archiveArtifacts &apos;properties&apos;
+      }
+      }
+    </script>
+    <sandbox>true</sandbox>
+  </definition>
+  <triggers/>
+  <disabled>false</disabled>
+</flow-definition>

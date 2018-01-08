@@ -1,0 +1,48 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: rosco
+  labels:
+    component: rosco
+spec:
+  strategy:
+    rollingUpdate:
+      maxUnavailable: 0
+  replicas: 1
+  template:
+    metadata:
+      annotations:
+        # TODO
+        checksum/config: {{ include (print $.Template.BasePath "/configmap/spinnaker-config.yaml") . | sha256sum }}
+      labels:
+        component: rosco
+    spec:
+      containers:
+        - image: gcr.io/spinnaker-marketplace/rosco:0.4.0-72
+          name: rosco
+          ports:
+            - containerPort: 8087
+              name: rosco
+          volumeMounts:
+            - mountPath: /opt/spinnaker/config
+              name: spinnaker-config
+            - mountPath: /usr/bin/docker
+              name: docker-bin
+            - mountPath: /var/run/docker.sock
+              name: docker-sock
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8087
+            initialDelaySeconds: 20
+            timeoutSeconds: 1
+      volumes:
+        - name: spinnaker-config
+          configMap:
+            name: spinnaker-config
+        - name: docker-bin
+          hostPath:
+            path: /usr/bin/docker
+        - name: docker-sock
+          hostPath:
+            path: /var/run/docker.sock

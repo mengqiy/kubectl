@@ -1,0 +1,38 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: echo
+  labels:
+    component: echo
+spec:
+  strategy:
+    rollingUpdate:
+      maxUnavailable: 0
+  replicas: 1
+  template:
+    metadata:
+      annotations:
+        # TODO
+        checksum/config: {{ include (print $.Template.BasePath "/configmap/spinnaker-config.yaml") . | sha256sum }}
+      labels:
+        component: echo
+    spec:
+      containers:
+        - image: gcr.io/spinnaker-marketplace/echo:0.4.0-72
+          name: echo
+          ports:
+            - containerPort: 8089
+              name: echo
+          volumeMounts:
+            - mountPath: /opt/spinnaker/config
+              name: spinnaker-config
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8089
+            initialDelaySeconds: 20
+            timeoutSeconds: 1
+      volumes:
+        - name: spinnaker-config
+          configMap:
+            name: spinnaker-config

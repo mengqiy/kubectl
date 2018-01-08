@@ -1,0 +1,10 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: rosco
+spec:
+  template:
+    spec:
+      containers:
+        - image: gcr.io/spinnaker-marketplace/rosco:0.4.0-72 # you can change the image here.
+          name: rosco

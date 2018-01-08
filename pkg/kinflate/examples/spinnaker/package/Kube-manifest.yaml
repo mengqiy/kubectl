@@ -1,0 +1,39 @@
+apiVersion: manifest.k8s.io/v1alpha1
+kind: Manifest
+metadata:
+  name: mungebot
+resources:
+- deployments/
+# Uncomment this line to enable it.
+- hooks/create-bucket.yaml
+- hooks/delete-jobs.yaml
+- hooks/test.yaml
+- hooks/upload-build-image.yaml
+- hooks/upload-run-pipeline.yaml
+- hooks/upload-run-script.yaml
+# Uncomment this line to enable it.
+#- ingress/deck.yaml
+- svc/
+configmaps:
+- type: file
+  namePrefix: jenkins-jobs
+  files:
+  - configmaps/build-image.xml
+  - configmaps/run-pipeline.xml
+  - configmaps/run-script.xml
+- type: file
+  namePrefix: s3-config
+  files:
+  - configmaps/credentials
+
+#There could be secrets in Base, if just using a fork/rebase workflow
+secrets:
+- type: tls
+  namePrefix: app-tls
+  tls:
+    certFile: secret/tls.cert
+    keyFile: secret/tls.key
+#Recursive would be similar to kubectl --recursive behavior, extended to look for Kube-manifest.yaml
+recursive: false
+#Whether PersistentVolumeClaims should be deleted with the other resources
+ownPersistentVolumeClaims: true

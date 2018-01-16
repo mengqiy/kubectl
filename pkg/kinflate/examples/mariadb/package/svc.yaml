@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: mariadb
+  labels:
+    app: mariadb
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9104"
+spec:
+  type: ClusterIP
+  ports:
+  - name: mysql
+    port: 3306
+    targetPort: mysql
+    # Uncomment nodePort to use nodeport service
+#    nodePort: 8888
+  # Uncomment the following port if you want to use metrics
+#  - name: metrics
+#    port: 9104
+#    targetPort: metrics
+  selector:
+    app: mariadb

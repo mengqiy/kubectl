@@ -1,0 +1,114 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: mariadb
+  labels:
+    app: mariadb
+spec:
+  selector:
+    app: mariadb
+  template:
+    metadata:
+      labels:
+        app: mariadb
+    spec:
+      securityContext:
+        runAsUser: 1001
+        fsGroup: 1001
+      initContainers:
+      - name: "copy-custom-config"
+        image: "busybox"
+        imagePullPolicy: IfNotPresent
+        command: ["sh", "-c", "mkdir -p /bitnami/mariadb/conf && cp /bitnami/mariadb_config/my.cnf /bitnami/mariadb/conf/my_custom.cnf"]
+        volumeMounts:
+        - name: config
+          mountPath: /bitnami/mariadb_config
+        - name: data
+          mountPath: /bitnami/mariadb
+      containers:
+      - name: mariadb
+        image: bitnami/mariadb:10.1.30-r1
+        imagePullPolicy: IfNotPresent
+        env:
+        # Comment MARIADB_ROOT_PASSWORD and MARIADB_PASSWORD
+        # if you don't want to use password.
+        - name: MARIADB_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: mariadb-secret
+              key: mariadb-root-password
+        # Uncomment MARIADB_PASSWORD if you want to user passward and
+        # create a mariadb User.
+#        - name: MARIADB_PASSWORD
+#          valueFrom:
+#            secretKeyRef:
+#              name: mariadb-secret
+#              key: mariadb-password
+        # Uncomment ALLOW_EMPTY_PASSWORD if you want to use password
+#        - name: ALLOW_EMPTY_PASSWORD
+#          value: "yes"
+        - name: MARIADB_USER
+          value: ""
+        - name: MARIADB_DATABASE
+          value: ""
+        ports:
+        - name: mysql
+          containerPort: 3306
+        livenessProbe:
+          exec:
+            command:
+            - mysqladmin
+            - ping
+          initialDelaySeconds: 30
+          timeoutSeconds: 5
+        readinessProbe:
+          exec:
+            command:
+            - mysqladmin
+            - ping
+          initialDelaySeconds: 5
+          timeoutSeconds: 1
+        resources:
+          requests:
+            memory: 256Mi
+            cpu: 250m
+        volumeMounts:
+        - name: data
+          mountPath: /bitnami/mariadb
+      # Uncomment the following container to enable the metrics container.
+#       - name: metrics
+#         image: prom/mysqld-exporter:v0.10.0
+#         imagePullPolicy: IfNotPresent
+#         env:
+#         # Comment the following env if you don't want to use password
+#         - name: MARIADB_ROOT_PASSWORD
+#           valueFrom:
+#             secretKeyRef:
+#               name: mariadb-secret
+#               key: mariadb-root-password
+#         command: [ 'sh', '-c', 'DATA_SOURCE_NAME="root:$MARIADB_ROOT_PASSWORD@(localhost:3306)/" /bin/mysqld_exporter' ]
+#         ports:
+#         - name: metrics
+#           containerPort: 9104
+#         livenessProbe:
+#           httpGet:
+#             path: /metrics
+#             port: metrics
+#           initialDelaySeconds: 15
+#           timeoutSeconds: 5
+#         readinessProbe:
+#           httpGet:
+#             path: /metrics
+#             port: metrics
+#           initialDelaySeconds: 5
+#           timeoutSeconds: 1
+#         resources: {}
+      volumes:
+      - name: config
+        configMap:
+          name: mariadb-cm
+      - name: data
+        # Only one of persistentVolumeClaim or emptyDir can be used.
+        persistentVolumeClaim:
+          claimName: mariadb
+        # emptyDir: {}

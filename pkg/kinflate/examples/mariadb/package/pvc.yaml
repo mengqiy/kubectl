@@ -1,0 +1,15 @@
+# If you want to a manually managed Persistent Volume and Claim, comment all of
+# the following and the PVC must be created manually before volume will be bound.
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: mariadb
+  labels:
+    app: mariadb
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 8Gi
+  storageClassName: ""

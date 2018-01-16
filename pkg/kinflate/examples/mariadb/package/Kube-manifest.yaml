@@ -1,0 +1,32 @@
+apiVersion: manifest.k8s.io/v1alpha1
+kind: Manifest
+metadata:
+  name: mungebot
+objectLabels:
+  dam: mariadb-0.1.0
+  env: test
+  heritage: someHeritage
+resources:
+  - deployment.yaml
+  # Comment pvc.yaml if you want to manually manage the Persistent Volume and Claim
+  - pvc.yaml
+  - svc.yaml
+# Uncomment mariadb-cm if you want configure MariaDB with a custom my.cnf file.
+# ref: https://mariadb.com/kb/en/mariadb/configuring-mariadb-with-mycnf/#example-of-configuration-file
+#configMaps:
+#  - namePrefix: mariadb-cm
+#    type: file
+#    files:
+#      - configmaps/my.cnf
+
+# Comment mariadb-secret if you don't want to use password in mariadb
+secrets:
+  - namePrefix: mariadb-secret
+    type: literal
+    literals:
+      - "mariadb-root-password=rootpw"
+      - "mariadb-password=userpw"
+#Recursive would be similar to kubectl --recursive behavior, extended to look for Kube-manifest.yaml
+#recursive: false
+#Whether PersistentVolumeClaims should be deleted with the other resources
+#ownPersistentVolumeClaims: true
